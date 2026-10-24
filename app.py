@@ -15,11 +15,11 @@ layout="centered"
 st.title("🎬 Smart AI Video Creator 2.0")
 st.write("अपनी कहानी, फोटो और आवाज़ चुनें। फिर वीडियो बनाएँ।")
 
------------------------------
+#-----------------------------
 
 SETTINGS
 
------------------------------
+#-----------------------------
 
 voice_options = {
 "हिंदी पुरुष": "hi-IN-MadhurNeural",
@@ -80,11 +80,11 @@ with st.expander("चुनी गई सभी फोटो देखें"):
             st.image(file, use_container_width=True)
             st.caption(f"फोटो {i + 1}")
 
------------------------------
+#-----------------------------
 
 VIDEO HELPERS
 
------------------------------
+#-----------------------------
 
 def create_tts(text, voice, rate, output_path):
 async def generate():
@@ -166,11 +166,11 @@ animated = animated.crop(
 
 return animated.set_duration(duration)
 
------------------------------
+#-----------------------------
 
 CREATE VIDEO
 
------------------------------
+#-----------------------------
 
 if st.button("🚀 वीडियो बनाएँ", use_container_width=True):
 
