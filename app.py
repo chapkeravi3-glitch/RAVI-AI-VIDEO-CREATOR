@@ -2,8 +2,6 @@ import streamlit as st
 import asyncio
 import edge_tts
 from moviepy.config import change_settings
-
-# Streamlit/MoviePy बैकएंड फिक्स
 import imageio_ffmpeg
 change_settings({"FFMPEG_BINARY": imageio_ffmpeg.get_ffmpeg_exe()})
 
@@ -32,7 +30,7 @@ script = st.text_area(
     label="3. अपनी स्क्रिप्ट यहाँ लिखें (हर नई लाइन पर नई फोटो आएगी):",
     value="",
     height=150,
-    placeholder="लाइन 1: एक सुंदर जंगल था...\n라인 2: वहाँ एक शेर रहता था..."
+    placeholder="लाइन 1: एक सुंदर जंगल था...\nलाइन 2: वहाँ एक शेर रहता था..."
 )
 
 # 4. बल्क फोटो अपलोड
@@ -66,26 +64,22 @@ if st.button("🚀 वीडियो बनाएँ", use_container_width=True
                 target_size = (1080, 1920) if "9:16" in video_format else (1920, 1080)
                 
                 for idx, line in enumerate(lines):
-                    # TTS ऑडियो बनाना
                     audio_path = f"temp_audio_{idx}.mp3"
                     asyncio.run(generate_audio(line, voice_code, audio_path))
                     
                     a_clip = mp.AudioFileClip(audio_path)
                     audio_clips.append(a_clip)
                     
-                    # इमेज सेव करना
                     img_file = uploaded_files[idx % len(uploaded_files)]
-                    img_path = f"temp_img_{idx}.png"
+                    img_path = f"temp_img_{idx}.jpg"
                     
                     with open(img_path, "wb") as f:
                         f.write(img_file.getbuffer())
                     
-                    # सुरक्षित रीसाइज़ (बिना ANTIALIAS एरर के)
                     i_clip = mp.ImageClip(img_path).set_duration(a_clip.duration)
-                    i_clip = i_clip.resize(newsize=target_size)
+                    i_clip = i_clip.resize(target_size)
                     image_clips.append(i_clip)
                 
-                # क्लिप्स जोड़ना
                 final_audio = mp.concatenate_audioclips(audio_clips)
                 final_video = mp.concatenate_videoclips(image_clips, method="compose")
                 final_video = final_video.set_audio(final_audio)
