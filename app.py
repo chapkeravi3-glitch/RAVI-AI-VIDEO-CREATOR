@@ -1,98 +1,327 @@
 import streamlit as st
 import os
-from gtts import gTTS
+import tempfile
+import asyncio
+import edge_tts
 import moviepy.editor as mp
-from PIL import Image
+from PIL import Image, ImageOps
 
-st.set_page_config(page_title="Smart AI Video Creator", page_icon="🎬", layout="centered")
+st.set_page_config(
+page_title="Smart AI Video Creator 2.0",
+page_icon="🎬",
+layout="centered"
+)
 
-st.title("🎬 स्मार्ट AI वीडियो क्रिएटर")
-st.write("अब यह ऐप आपकी लिखी हर लाइन के हिसाब से सही फोटो को ऑटोमैटिक सेट करेगा!")
+st.title("🎬 Smart AI Video Creator 2.0")
+st.write("अपनी कहानी, फोटो और आवाज़ चुनें। फिर वीडियो बनाएँ।")
 
-# 1. टेक्स्ट/नरेशन इनपुट (लाइन-बाय-लाइन)
+-----------------------------
+
+SETTINGS
+
+-----------------------------
+
+voice_options = {
+"हिंदी पुरुष": "hi-IN-MadhurNeural",
+"हिंदी महिला": "hi-IN-SwaraNeural"
+}
+
+voice_name = st.selectbox(
+"1. वीडियो की आवाज़ चुनें",
+list(voice_options.keys())
+)
+
+voice_rate = st.selectbox(
+"2. आवाज़ की गति",
+["सामान्य", "धीमी", "तेज़"]
+)
+
+rate_map = {
+"सामान्य": "+0%",
+"धीमी": "-15%",
+"तेज़": "+15%"
+}
+
+video_format = st.selectbox(
+"3. वीडियो का आकार",
+["YouTube Shorts (9:16)", "YouTube Landscape (16:9)"]
+)
+
+animation = st.selectbox(
+"4. फोटो एनिमेशन",
+[
+"धीमा Zoom In",
+"धीमा Zoom Out",
+"बारी-बारी Zoom In और Zoom Out",
+"बिना एनिमेशन"
+]
+)
+
 script = st.text_area(
-    label="1. अपनी कहानी या नरेशन (Script) लिखें (हर लाइन में अलग बात लिखें):",
-    value="",
-    height=180,
-    placeholder="लाइन 1: एक सुंदर जंगल था...\nलाइन 2: वहाँ एक शेर रहता था...\nलाइन 3: सब जानवर खुश थे..."
+"5. अपनी हिंदी कहानी लिखें (हर लाइन में एक दृश्य)",
+height=200,
+placeholder="एक घने जंगल में सुबह हुई।\nजंगल में पक्षियों की आवाज़ गूँजने लगी।\nतभी एक शेर धीरे-धीरे बाहर आया।"
 )
 
-# 2. इमेजेस अपलोड
 uploaded_files = st.file_uploader(
-    "2. अपनी तस्वीरें (Images) अपलोड करें (कितनी भी फोटो डालें):", 
-    type=["jpg", "jpeg", "png"], 
-    accept_multiple_files=True
+"6. एक साथ कई फोटो चुनें",
+type=["jpg", "jpeg", "png", "webp"],
+accept_multiple_files=True,
+help="मोबाइल के फाइल पिकर में कई फोटो चुनने का विकल्प इस्तेमाल करें।"
 )
 
-# 3. आवाज़ की स्पीड चुनने का विकल्प
-voice_speed = st.selectbox("3. आवाज़ की गति (Speed):", ["सामान्य (Normal)", "धीमी (Slow)"])
-slow_setting = True if voice_speed == "धीमी (Slow)" else False
+if uploaded_files:
+st.success(f"कुल {len(uploaded_files)} फोटो चुनी गईं")
 
-# 4. वीडियो बनाएँ बटन
-if st.button("🚀 स्मार्ट वीडियो बनाएँ", use_container_width=True):
-    if not script.strip():
-        st.error("⚠️ कृपया पहले अपनी स्क्रिप्ट या कहानी लिखें!")
-    elif not uploaded_files:
-        st.error("⚠️ कृपया कम से कम 1 या अधिक तस्वीरें अपलोड करें!")
+with st.expander("चुनी गई सभी फोटो देखें"):
+    cols = st.columns(3)
+    for i, file in enumerate(uploaded_files):
+        with cols[i % 3]:
+            st.image(file, use_container_width=True)
+            st.caption(f"फोटो {i + 1}")
+
+-----------------------------
+
+VIDEO HELPERS
+
+-----------------------------
+
+def create_tts(text, voice, rate, output_path):
+async def generate():
+communicate = edge_tts.Communicate(
+text=text,
+voice=voice,
+rate=rate
+)
+await communicate.save(output_path)
+
+asyncio.run(generate())
+
+def prepare_image(file, output_path, size):
+file.seek(0)
+
+with Image.open(file) as original:
+    img = ImageOps.exif_transpose(original).convert("RGB")
+
+target_w, target_h = size
+target_ratio = target_w / target_h
+img_ratio = img.width / img.height
+
+# Crop image to fill the video frame
+if img_ratio > target_ratio:
+    new_w = int(img.height * target_ratio)
+    left = (img.width - new_w) // 2
+    img = img.crop((left, 0, left + new_w, img.height))
+else:
+    new_h = int(img.width / target_ratio)
+    top = (img.height - new_h) // 2
+    img = img.crop((0, top, img.width, top + new_h))
+
+img = img.resize(size, Image.Resampling.LANCZOS)
+img.save(output_path, quality=92)
+
+return output_path
+
+def animate_image(image_path, duration, size, mode, scene_index):
+clip = mp.ImageClip(image_path).set_duration(duration)
+
+if mode == "बिना एनिमेशन" or duration <= 0.5:
+    return clip
+
+# A subtle zoom keeps the original image composition.
+zoom_in = (
+    mode == "धीमा Zoom In"
+    or (
+        mode == "बारी-बारी Zoom In और Zoom Out"
+        and scene_index % 2 == 0
+    )
+)
+
+zoom_out = (
+    mode == "धीमा Zoom Out"
+    or (
+        mode == "बारी-बारी Zoom In और Zoom Out"
+        and scene_index % 2 == 1
+    )
+)
+
+if zoom_in:
+    scale = lambda t: 1.0 + 0.08 * (t / duration)
+elif zoom_out:
+    scale = lambda t: 1.08 - 0.08 * (t / duration)
+else:
+    return clip
+
+w, h = size
+
+animated = clip.resize(scale)
+
+# Center crop to keep the final video dimensions constant.
+animated = animated.crop(
+    x_center=animated.w / 2,
+    y_center=animated.h / 2,
+    width=w,
+    height=h
+)
+
+return animated.set_duration(duration)
+
+-----------------------------
+
+CREATE VIDEO
+
+-----------------------------
+
+if st.button("🚀 वीडियो बनाएँ", use_container_width=True):
+
+if not script.strip():
+    st.error("पहले अपनी कहानी लिखें।")
+
+elif not uploaded_files:
+    st.error("कम से कम एक फोटो चुनें।")
+
+else:
+    lines = [
+        line.strip()
+        for line in script.splitlines()
+        if line.strip()
+    ]
+
+    if not lines:
+        st.error("कहानी में कम से कम एक लाइन लिखें।")
+        st.stop()
+
+    voice = voice_options[voice_name]
+    rate = rate_map[voice_rate]
+
+    if video_format == "YouTube Shorts (9:16)":
+        size = (720, 1280)
     else:
-        with st.spinner("⏳ स्मार्ट तरीके से ऑडियो और वीडियो प्रोसेस हो रहा है... कृपया प्रतीक्षा करें..."):
-            try:
-                # स्क्रिप्ट को लाइनों में तोड़ना
-                lines = [line.strip() for line in script.split('\n') if line.strip()]
-                if not lines:
-                    lines = [script]
-                
-                audio_clips = []
-                image_clips = []
-                
-                # हर लाइन के लिए अलग ऑडियो और उसकी सही फोटो सेट करना
-                for idx, line in enumerate(lines):
-                    # 1. हर लाइन का अलग ऑडियो बनाना
-                    tts = gTTS(text=line, lang='hi', slow=slow_setting)
-                    audio_path = f"temp_audio_{idx}.mp3"
-                    tts.save(audio_path)
-                    
-                    a_clip = mp.AudioFileClip(audio_path)
-                    audio_clips.append(a_clip)
-                    
-                    # 2. उस लाइन के हिसाब से फोटो चुनना (अगर फोटो कम हैं तो रिपीट हो जाएंगी)
-                    img_file = uploaded_files[idx % len(uploaded_files)]
-                    img_path = f"temp_img_{idx}.jpg"
-                    
-                    img = Image.open(img_file).convert("RGB")
-                    img.save(img_path)
-                    
-                    # 3. फोटो को ठीक उतने ही सेकंड का रखना जितने सेकंड की वो लाइन है
-                    i_clip = mp.ImageClip(img_path).set_duration(a_clip.duration)
-                    image_clips.append(i_clip)
-                
-                # सभी ऑडियो और वीडियो क्लिप्स को आपस में जोड़ना
-                final_audio = mp.concatenate_audioclips(audio_clips)
-                final_video = mp.concatenate_videoclips(image_clips, method="compose")
-                final_video = final_video.set_audio(final_audio)
-                
-                output_video_path = "smart_final_output.mp4"
-                final_video.write_videofile(
-                    output_video_path, 
-                    fps=24, 
-                    codec="libx264", 
-                    audio_codec="aac"
-                )
-                
-                # सफलता का संदेश और वीडियो दिखाना
-                st.success("🎉 आपका स्मार्ट वीडियो बनकर तैयार है!")
-                st.video(output_video_path)
-                
-                # डाउनलोड बटन
-                with open(output_video_path, "rb") as file:
-                    st.download_button(
-                        label="📥 वीडियो डाउनलोड करें",
-                        data=file,
-                        file_name="my_smart_video.mp4",
-                        mime="video/mp4",
-                        use_container_width=True
-                    )
-                    
-            except Exception as e:
-                st.error(f"❌ वीडियो बनाने में समस्या आई: {e}")
+        size = (1280, 720)
 
+    progress = st.progress(0)
+    status = st.empty()
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+
+            audio_clips = []
+            image_clips = []
+            audio_paths = []
+            image_paths = []
+
+            for idx, line in enumerate(lines):
+
+                status.write(
+                    f"🎙️ आवाज़ बना रहे हैं: {idx + 1}/{len(lines)}"
+                )
+
+                audio_path = os.path.join(
+                    temp_dir, f"audio_{idx}.mp3"
+                )
+
+                create_tts(
+                    line,
+                    voice,
+                    rate,
+                    audio_path
+                )
+
+                audio_paths.append(audio_path)
+
+                audio_clip = mp.AudioFileClip(audio_path)
+                audio_clips.append(audio_clip)
+
+                # Match each line with an uploaded image.
+                image_file = uploaded_files[
+                    idx % len(uploaded_files)
+                ]
+
+                image_path = os.path.join(
+                    temp_dir, f"image_{idx}.jpg"
+                )
+
+                prepare_image(
+                    image_file,
+                    image_path,
+                    size
+                )
+
+                image_paths.append(image_path)
+
+                duration = audio_clip.duration
+
+                image_clip = animate_image(
+                    image_path,
+                    duration,
+                    size,
+                    animation,
+                    idx
+                )
+
+                image_clips.append(image_clip)
+
+                progress.progress(
+                    int(((idx + 1) / len(lines)) * 70)
+                )
+
+            status.write("🎬 सभी दृश्य जोड़ रहे हैं...")
+
+            final_audio = mp.concatenate_audioclips(
+                audio_clips
+            )
+
+            final_video = mp.concatenate_videoclips(
+                image_clips,
+                method="compose"
+            )
+
+            final_video = final_video.set_audio(final_audio)
+
+            output_path = os.path.join(
+                temp_dir, "smart_video.mp4"
+            )
+
+            final_video.write_videofile(
+                output_path,
+                fps=24,
+                codec="libx264",
+                audio_codec="aac",
+                preset="ultrafast",
+                threads=2,
+                logger=None
+            )
+
+            progress.progress(100)
+            status.success("✅ आपका वीडियो तैयार है!")
+
+            st.video(output_path)
+
+            with open(output_path, "rb") as video_file:
+                st.download_button(
+                    "📥 MP4 वीडियो डाउनलोड करें",
+                    data=video_file.read(),
+                    file_name="smart_ai_video.mp4",
+                    mime="video/mp4",
+                    use_container_width=True
+                )
+
+            final_video.close()
+            final_audio.close()
+
+            for clip in image_clips:
+                clip.close()
+
+            for clip in audio_clips:
+                clip.close()
+
+    except Exception as error:
+        st.error(
+            "वीडियो बनाते समय समस्या आई। "
+            "नीचे दिए गए विवरण को देखें।"
+        )
+        st.code(str(error))
+        st.info(
+            "अगर समस्या दोबारा आती है, तो यह Error "
+            "कॉपी करके भेजें।"
+)
