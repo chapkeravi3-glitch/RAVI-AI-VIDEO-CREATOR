@@ -1,4 +1,5 @@
 streamlit
 edge-tts
-moviepy==1.0.3
-pillow==9.5.0
+moviepy
+pillow
+imageio-ffmpeg
