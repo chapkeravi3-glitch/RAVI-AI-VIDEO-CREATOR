@@ -2,4 +2,5 @@ streamlit
 gTTS
 edge-tts
 moviepy==1.0.3
-Pillow==9.5.0
+Pillow>=11.0.0
+imageio-ffmpeg
