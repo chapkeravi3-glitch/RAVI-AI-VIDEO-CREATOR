@@ -1,4 +1,1 @@
-streamlit
-edge-tts
-moviepy==1.0.3
-pillow==9.5.0
+python -m pip install streamlit edge-tts moviepy==1.0.3 Pillow==9.5.0
