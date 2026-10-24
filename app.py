@@ -1,12 +1,16 @@
 import streamlit as st
 import asyncio
 import edge_tts
-import moviepy.editor as mp
+import moviepy as mp
+from moviepy.video.io.VideoFileClip import ImageClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
+from moviepy.video.compositing.concatenate import concatenate_videoclips
+from moviepy.audio.compositing.concatenate import concatenate_audioclips
 
 st.set_page_config(page_title="AI Video Creator", page_icon="🎬", layout="centered")
 
 st.title("🎬 प्रो AI वीडियो क्रिएटर")
-st.write("तस्वीरें अपलोड करें, आवाज़ चुनें, और शानदार वीडियो बनाएं!")
+st.write("अपनी तस्वीरें अपलोड करें, आवाज़ चुनें, और शानदार वीडियो बनाएं!")
 
 # 1. वीडियो फॉर्मेट
 video_format = st.selectbox(
@@ -63,7 +67,7 @@ if st.button("🚀 वीडियो बनाएँ", use_container_width=True
                     audio_path = f"temp_audio_{idx}.mp3"
                     asyncio.run(generate_audio(line, voice_code, audio_path))
                     
-                    a_clip = mp.AudioFileClip(audio_path)
+                    a_clip = AudioFileClip(audio_path)
                     audio_clips.append(a_clip)
                     
                     img_file = uploaded_files[idx % len(uploaded_files)]
@@ -72,13 +76,13 @@ if st.button("🚀 वीडियो बनाएँ", use_container_width=True
                     with open(img_path, "wb") as f:
                         f.write(img_file.getbuffer())
                     
-                    i_clip = mp.ImageClip(img_path).set_duration(a_clip.duration)
-                    i_clip = i_clip.resize(target_size)
+                    i_clip = ImageClip(img_path).with_duration(a_clip.duration)
+                    i_clip = i_clip.resized(target_size)
                     image_clips.append(i_clip)
                 
-                final_audio = mp.concatenate_audioclips(audio_clips)
-                final_video = mp.concatenate_videoclips(image_clips, method="compose")
-                final_video = final_video.set_audio(final_audio)
+                final_audio = concatenate_audioclips(audio_clips)
+                final_video = concatenate_videoclips(image_clips, method="compose")
+                final_video = final_video.with_audio(final_audio)
                 
                 output_video_path = "pro_final_output.mp4"
                 final_video.write_videofile(
