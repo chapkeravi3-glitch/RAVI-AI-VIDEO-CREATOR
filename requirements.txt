@@ -1,4 +1,4 @@
 streamlit
 edge-tts
-moviepy
-pillow
+moviepy==1.0.3
+pillow==9.5.0
