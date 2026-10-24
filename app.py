@@ -71,7 +71,9 @@ help="मोबाइल के फाइल पिकर में कई फ�
 )
 
 if uploaded_files:
-st.success(f"कुल {len(uploaded_files)} फोटो चुनी गईं")
+    st.success(f"कुल {len(uploaded_files)} फोटो चुनी गईं")
+    for image in uploaded_files:
+        st.image(image, width=150)
 
 with st.expander("चुनी गई सभी फोटो देखें"):
     cols = st.columns(3)
