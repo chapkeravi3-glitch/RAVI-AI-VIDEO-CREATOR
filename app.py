@@ -5,7 +5,9 @@ import asyncio
 import edge_tts
 import moviepy.editor as mp
 from PIL import Image, ImageOps
-
+# Pillow compatibility fix for MoviePy
+if not hasattr(Image, "ANTIALIAS"):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
 st.set_page_config(
     page_title="Smart AI Video Creator 2.0",
     page_icon="🎬",
