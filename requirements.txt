@@ -1,4 +1,5 @@
 streamlit
+gTTS
 edge-tts
 moviepy
 Pillow
