@@ -1,38 +1,43 @@
 import streamlit as st
 import asyncio
 import edge_tts
+from moviepy.config import change_settings
+
+# Streamlit/MoviePy बैकएंड फिक्स
+import imageio_ffmpeg
+change_settings({"FFMPEG_BINARY": imageio_ffmpeg.get_ffmpeg_exe()})
+
 import moviepy.editor as mp
 
-st.set_page_config(page_title="Pro AI Video Creator", page_icon="🎬", layout="centered")
+st.set_page_config(page_title="AI Video Creator", page_icon="🎬", layout="centered")
 
 st.title("🎬 प्रो AI वीडियो क्रिएटर")
-st.write("अपनी तस्वीरें अपलोड करें, आवाज़ चुनें, और शानदार वीडियो बनाएं!")
+st.write("अपनी तस्वीरें अपलोड करें, मेल/फीमेल आवाज़ चुनें, और शानदार वीडियो बनाएं!")
 
-# 1. वीडियो फॉर्मेट (साइज)
+# 1. वीडियो फॉर्मेट
 video_format = st.selectbox(
     "1. वीडियो का साइज़ चुनें:",
     ["Reels / Shorts (9:16 - वर्टिकल)", "YouTube / Long Video (16:9 - हॉरिजॉन्टल)"]
 )
 
-# 2. आवाज़ चुनना
+# 2. नरेटर आवाज़
 voice_option = st.selectbox(
     "2. नरेटर की आवाज़ चुनें:",
     ["फीमेल आवाज़ (hi-IN-SwaraNeural)", "मेल आवाज़ (hi-IN-MadhurNeural)"]
 )
-
 voice_code = "hi-IN-SwaraNeural" if "Swara" in voice_option else "hi-IN-MadhurNeural"
 
-# 3. स्क्रिप्ट लिखना
+# 3. स्क्रिप्ट
 script = st.text_area(
-    label="3. अपनी स्क्रिप्ट यहाँ लिखें (हर लाइन के लिए नई फोटो आएगी):",
+    label="3. अपनी स्क्रिप्ट यहाँ लिखें (हर नई लाइन पर नई फोटो आएगी):",
     value="",
     height=150,
-    placeholder="लाइन 1: एक सुंदर जंगल था...\nलाइन 2: वहाँ एक शेर रहता था..."
+    placeholder="लाइन 1: एक सुंदर जंगल था...\n라인 2: वहाँ एक शेर रहता था..."
 )
 
-# 4. तस्वीरें अपलोड करना
+# 4. बल्क फोटो अपलोड
 uploaded_files = st.file_uploader(
-    "4. अपनी तस्वीरें अपलोड करें (एक या एक से अधिक):", 
+    "4. अपनी तस्वीरें (Images) अपलोड करें:", 
     type=["jpg", "jpeg", "png"], 
     accept_multiple_files=True
 )
@@ -44,7 +49,6 @@ async def generate_audio(text, voice, output_path):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_path)
 
-# वीडियो बनाने का बटन
 if st.button("🚀 वीडियो बनाएँ", use_container_width=True):
     if not script.strip():
         st.error("⚠️ कृपया पहले अपनी स्क्रिप्ट लिखें!")
@@ -59,33 +63,29 @@ if st.button("🚀 वीडियो बनाएँ", use_container_width=True
                 
                 audio_clips = []
                 image_clips = []
-                
                 target_size = (1080, 1920) if "9:16" in video_format else (1920, 1080)
                 
                 for idx, line in enumerate(lines):
-                    # ऑडियो बनाना
+                    # TTS ऑडियो बनाना
                     audio_path = f"temp_audio_{idx}.mp3"
                     asyncio.run(generate_audio(line, voice_code, audio_path))
                     
                     a_clip = mp.AudioFileClip(audio_path)
                     audio_clips.append(a_clip)
                     
-                    # फोटो सेव करना
+                    # इमेज सेव करना
                     img_file = uploaded_files[idx % len(uploaded_files)]
-                    img_path = f"temp_img_{idx}.jpg"
+                    img_path = f"temp_img_{idx}.png"
                     
                     with open(img_path, "wb") as f:
                         f.write(img_file.getbuffer())
                     
-                    # MoviePy क्लिप बनाना
-                    clip_duration = a_clip.duration
-                    i_clip = mp.ImageClip(img_path).set_duration(clip_duration)
-                    
-                    # बिना एंटीलियास एरर के सीधा रिसाइज
-                    i_clip = i_clip.resize(target_size)
+                    # सुरक्षित रीसाइज़ (बिना ANTIALIAS एरर के)
+                    i_clip = mp.ImageClip(img_path).set_duration(a_clip.duration)
+                    i_clip = i_clip.resize(newsize=target_size)
                     image_clips.append(i_clip)
                 
-                # सब जोड़ना
+                # क्लिप्स जोड़ना
                 final_audio = mp.concatenate_audioclips(audio_clips)
                 final_video = mp.concatenate_videoclips(image_clips, method="compose")
                 final_video = final_video.set_audio(final_audio)
